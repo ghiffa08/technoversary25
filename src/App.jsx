@@ -9,8 +9,8 @@ import {
   signInWithCustomToken,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
+  // signInWithRedirect, // Kita hapus ini agar lebih stabil
+  // getRedirectResult,  // Kita hapus ini
   signOut
 } from "firebase/auth";
 import { 
@@ -28,12 +28,10 @@ const CLOUDINARY_CLOUD_NAME = "dosny0nzd";
 const CLOUDINARY_UPLOAD_PRESET = "technoversary25"; 
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
-const APP_LOGO = "/logo-techno.webp"
-
-const APP_LOGO_SPLASH = "/logo-splash.webp"
+const APP_LOGO = "https://placehold.co/600x150/orange/white?text=TECHNO+VERSARY+2025&font=montserrat"; 
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
-const EVENT_POSTER = "/poster-techno.webp"
+const EVENT_POSTER = "https://placehold.co/1080x1350/orange/white?text=Poster+Seminar+Nasional+2025"; 
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -185,7 +183,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      <Button 
       onClick={onLogin} 
       disabled={isLoggingIn}
-      variant="outline" 
+      variant="outline"
       className="w-full max-w-xs gap-3 bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-lg shadow-orange-100 h-14 text-sm font-semibold relative overflow-hidden transition-all hover:scale-[1.02]"
      >
         {isLoggingIn ? (
@@ -199,7 +197,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      </Button>
      
      <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
-       Himpunan Mahasiswa Teknik Informatika<br/>Universitas Kuningan
+       Himpunan Mahasiswa Teknik Informatika
      </p>
   </div>
 );
@@ -584,17 +582,6 @@ export default function App() {
   useEffect(() => {
     if (!isFirebaseInitialized) return;
 
-    // Handle Redirect Result (For Mobile)
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          console.log("Redirect login success", result);
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect login failed:", error);
-      });
-
     // Listen to Auth Changes
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -625,22 +612,21 @@ export default function App() {
     const provider = new GoogleAuthProvider();
     
     // Check if mobile device
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     try {
-      if (isMobile) {
-        // Use redirect for mobile to avoid popup blockers
-        await signInWithRedirect(auth, provider);
-      } else {
-        // Use popup for desktop
-        await signInWithPopup(auth, provider);
-      }
+      // Use popup for all devices for consistency
+      await signInWithPopup(auth, provider);
     } catch (error) {
       console.error("Login Failed:", error);
       
       // Handle specific error for unauthorized domain
       if (error.code === 'auth/unauthorized-domain') {
         alert("Konfigurasi Firebase Belum Lengkap:\nDomain aplikasi ini belum didaftarkan di Firebase Console.\n\nSolusi: Buka Firebase Console > Authentication > Settings > Authorized Domains, lalu tambahkan domain Vercel Anda.");
+      } else if (error.code === 'auth/popup-blocked') {
+        alert("Login Popup Diblokir:\nSilakan izinkan popup untuk situs ini agar bisa login.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, usually fine to ignore or show subtle toast
       } else {
         alert(`Login Gagal: ${error.message}`);
       }
