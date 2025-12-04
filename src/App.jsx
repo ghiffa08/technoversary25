@@ -28,10 +28,12 @@ const CLOUDINARY_CLOUD_NAME = "dosny0nzd";
 const CLOUDINARY_UPLOAD_PRESET = "technoversary25"; 
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
-const APP_LOGO = "https://placehold.co/600x150/orange/white?text=TECHNO+VERSARY+2025&font=montserrat"; 
+  const APP_LOGO = "/logo-techno.webp";
+
+  const APP_LOGO_SPLASH = "/logo-techno.webp";
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
-const EVENT_POSTER = "https://placehold.co/1080x1350/orange/white?text=Poster+Seminar+Nasional+2025"; 
+const EVENT_POSTER =  "poster-seminar.webp";
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -144,7 +146,7 @@ const SplashScreen = ({ visible }) => {
         <div className="relative">
            <div className="absolute inset-0 bg-orange-500 blur-[60px] opacity-30 rounded-full animate-pulse"></div>
            <img 
-             src={APP_LOGO} 
+             src={APP_LOGO_SPLASH} 
              alt="Techno Versary Logo" 
              className="relative z-10 w-64 h-auto object-contain drop-shadow-2xl"
            />
@@ -197,7 +199,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      </Button>
      
      <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
-       Himpunan Mahasiswa Teknik Informatika
+       Himpunan Mahasiswa Teknik Informatika<br/>Universitas Kuningan
      </p>
   </div>
 );
