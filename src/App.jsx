@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Upload, Send, X, Heart, MessageSquare, Plus, User, Image as ImageIcon, Sparkles, RefreshCw, Circle, Loader2, AlertTriangle, Settings, ChevronRight } from 'lucide-react';
+import { Camera, Upload, Send, X, Heart, MessageSquare, Plus, User, Image as ImageIcon, Sparkles, RefreshCw, Circle, Loader2, AlertTriangle, Settings, ChevronRight, LogOut, Code2 } from 'lucide-react';
 
-// --- FIREBASE IMPORTS (REALTIME DATABASE) ---
+// --- FIREBASE IMPORTS (REALTIME DATABASE & AUTH) ---
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInWithCustomToken,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
+} from "firebase/auth";
 import { 
   getDatabase, 
   ref, 
@@ -14,9 +21,17 @@ import {
   serverTimestamp as rtdbTimestamp 
 } from "firebase/database";
 
-// --- CONFIG CLOUDINARY ---
+// --- CONFIGURATION ---
 const CLOUDINARY_CLOUD_NAME = "dosny0nzd"; 
 const CLOUDINARY_UPLOAD_PRESET = "technoversary25"; 
+
+// [PENTING] Ganti URL ini dengan path gambar logo Anda!
+const APP_LOGO = "/logo-techno.webp"; 
+const APP_LOGO_SPLASH = "/logo-splash.webp"; 
+
+// [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
+// Anda bisa mengupload gambar poster ke folder public dan mengganti URL ini dengan "/poster.jpg"
+const EVENT_POSTER = "/poster-techno.webp"; 
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -46,7 +61,7 @@ try {
   }
   
   auth = getAuth(app);
-  db = getDatabase(app); // Menggunakan Realtime Database
+  db = getDatabase(app);
   isFirebaseInitialized = true;
   console.log("Firebase RTDB initialized successfully");
 } catch (error) {
@@ -118,6 +133,74 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
+// --- SPLASH SCREEN COMPONENT ---
+const SplashScreen = ({ visible }) => {
+  if (!visible) return null;
+  
+  return (
+    <div className={`fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center transition-opacity duration-700 ease-out ${visible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className="relative mb-8 animate-in zoom-in duration-700 flex flex-col items-center">
+        {/* Logo Container with Glow */}
+        <div className="relative">
+           <div className="absolute inset-0 bg-orange-500 blur-[60px] opacity-30 rounded-full animate-pulse"></div>
+           <img 
+             src={APP_LOGO_SPLASH} 
+             alt="Techno Versary Logo" 
+             className="relative z-10 w-64 h-auto object-contain drop-shadow-2xl"
+           />
+        </div>
+      </div>
+      
+      <div className="text-center space-y-2 animate-in slide-in-from-bottom-4 duration-1000 delay-100 fill-mode-both px-4">
+        <p className="text-stone-500 font-medium tracking-[0.2em] text-xs uppercase">Seminar Nasional 2025</p>
+      </div>
+
+      <div className="absolute bottom-10 animate-in fade-in duration-1000 delay-300">
+         <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+      </div>
+    </div>
+  );
+};
+
+// --- LOGIN VIEW ---
+const LoginView = ({ onLogin, isLoggingIn }) => (
+  <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+     {/* Login Logo */}
+     <div className="mb-12 relative w-full max-w-[280px]">
+        <div className="absolute inset-0 bg-gradient-to-tr from-orange-400/20 to-red-400/20 blur-3xl rounded-full"></div>
+        <img 
+          src={APP_LOGO} 
+          alt="Techno Versary" 
+          className="relative w-full h-auto object-contain drop-shadow-xl"
+        />
+     </div>
+     
+     <h1 className="text-2xl font-bold text-stone-900 mb-3 tracking-tight">Selamat Datang!</h1>
+     <p className="text-stone-500 mb-10 max-w-xs leading-relaxed text-sm">
+       Bergabunglah untuk mengabadikan dan berbagi momen seru di Techno Versary 2025.
+     </p>
+
+     <Button 
+      onClick={onLogin} 
+      disabled={isLoggingIn}
+      className="w-full max-w-xs gap-3 bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-lg shadow-orange-100 h-14 text-sm font-semibold relative overflow-hidden transition-all hover:scale-[1.02]"
+     >
+        {isLoggingIn ? (
+          <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+        ) : (
+          <>
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+            <span>Masuk dengan Google</span>
+          </>
+        )}
+     </Button>
+     
+     <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
+       Himpunan Mahasiswa Teknik Informatika
+     </p>
+  </div>
+);
+
 // --- SUB-VIEWS ---
 
 const CameraView = ({ onCapture, onClose, fileInputRef }) => {
@@ -185,7 +268,7 @@ const CameraView = ({ onCapture, onClose, fileInputRef }) => {
 };
 
 // --- Post Item Component with Comments ---
-const PostItem = ({ post, onLike, onComment }) => {
+const PostItem = ({ post, onLike, onComment, currentUser }) => {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [isSendingComment, setIsSendingComment] = useState(false);
@@ -197,6 +280,20 @@ const PostItem = ({ post, onLike, onComment }) => {
     setCommentText("");
     setIsSendingComment(false);
   };
+
+  // --- LOGIKA LIKE BARU ---
+  // Cek apakah data likes berbentuk object (versi baru) atau angka (versi lama)
+  const likesData = post.likes || {};
+  
+  // Hitung jumlah like
+  const likeCount = typeof likesData === 'number' 
+    ? likesData 
+    : Object.keys(likesData).length;
+
+  // Cek apakah user sudah like
+  const isLiked = typeof likesData === 'object' && currentUser 
+    ? !!likesData[currentUser.uid] 
+    : false;
 
   return (
     <Card className="overflow-hidden group border-stone-100 shadow-sm hover:shadow-md transition-shadow">
@@ -216,10 +313,10 @@ const PostItem = ({ post, onLike, onComment }) => {
         <div className="mt-4 flex items-center justify-between border-t border-stone-50 pt-3">
           <button 
             onClick={() => onLike(post.id)}
-            className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-red-500 transition-colors group/like"
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors group/like ${isLiked ? 'text-red-500' : 'text-stone-500 hover:text-red-500'}`}
           >
-            <Heart className={`w-4 h-4 group-active/like:scale-125 transition-transform ${post.likes > 0 ? 'fill-red-500 text-red-500' : ''}`} /> 
-            {post.likes || 0} Suka
+            <Heart className={`w-4 h-4 group-active/like:scale-125 transition-transform ${isLiked ? 'fill-red-500 text-red-500' : ''}`} /> 
+            {likeCount} Suka
           </button>
           
           <button 
@@ -270,25 +367,47 @@ const PostItem = ({ post, onLike, onComment }) => {
   );
 }
 
-const FeedView = ({ posts, setView, onLike, onComment, loading }) => (
-  <div className="pb-24 animate-in fade-in duration-500 bg-stone-50 min-h-screen">
-    <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-orange-100 px-6 py-4 flex justify-between items-center">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-orange-500 fill-orange-500" />
-          Techno Versary
-        </h1>
-        <p className="text-xs text-stone-500 font-medium">Kick Start Your Career!</p>
+const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }) => (
+  <div className="pb-24 animate-in fade-in duration-500 bg-stone-50 min-h-screen relative flex flex-col">
+    {/* NAVBAR */}
+    <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-lg border-b border-orange-100/50 px-6 py-3 flex justify-between items-center shadow-sm">
+      <div className="flex items-center gap-2">
+        {/* Navbar Logo - Small Version */}
+        <img 
+          src={APP_LOGO} 
+          alt="Techno Versary" 
+          className="h-8 w-auto object-contain"
+        />
+        {/* Optional: Divider */}
+        <div className="h-4 w-px bg-stone-200 mx-1 hidden sm:block"></div>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest hidden sm:block pt-0.5">
+          Kick Start Your Career
+        </p>
       </div>
+      <button onClick={onLogout} className="p-2 bg-stone-50 rounded-full hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors border border-stone-100" title="Keluar">
+        <LogOut className="w-4 h-4" />
+      </button>
     </div>
 
-    <div className="px-4 py-6">
+    <div className="px-4 py-6 space-y-4">
+      {/* 1. Poster Image (Diatas Card) */}
+      <div className="rounded-2xl overflow-hidden shadow-lg shadow-orange-100 border border-stone-100">
+         <img 
+           src={EVENT_POSTER} 
+           alt="Poster Seminar Nasional 2025" 
+           className="w-full h-auto object-cover block"
+         />
+      </div>
+
+      {/* 2. Original Gradient Card (Seperti yang Anda inginkan) */}
       <div className="bg-gradient-to-br from-orange-600 to-red-600 rounded-2xl p-6 text-white shadow-xl shadow-orange-200 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full blur-3xl opacity-20 -mr-10 -mt-10"></div>
         <div className="relative z-10">
           <h2 className="text-lg font-bold mb-2">Seminar Nasional 2025</h2>
-          <p className="text-orange-50 text-sm mb-4">Abadikan momen belajarmu bersama Pak Avip & pemateri hebat lainnya!</p>
-          <Button variant="secondary" className="w-full gap-2 font-semibold text-orange-700 bg-white hover:bg-stone-50 border-none" onClick={() => setView('camera')}>
+          <p className="text-orange-50 text-sm mb-4 leading-relaxed">
+            Halo, <span className="font-bold text-white underline underline-offset-2">{user?.displayName || "Peserta"}</span>! Abadikan momenmu sekarang.
+          </p>
+          <Button variant="secondary" className="w-full gap-2 font-semibold text-orange-700 bg-white hover:bg-stone-50 border-none shadow-md" onClick={() => setView('camera')}>
             <Camera className="w-4 h-4" />
             Buka Kamera
           </Button>
@@ -296,7 +415,7 @@ const FeedView = ({ posts, setView, onLike, onComment, loading }) => (
       </div>
     </div>
 
-    <div className="px-4 space-y-6">
+    <div className="px-4 space-y-6 mb-8">
       <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
         <Circle className="w-3 h-3 fill-orange-500 text-orange-500" />
         Live Feed
@@ -316,9 +435,45 @@ const FeedView = ({ posts, setView, onLike, onComment, loading }) => (
         </div>
       ) : (
         posts.map((post) => (
-          <PostItem key={post.id} post={post} onLike={onLike} onComment={onComment} />
+          <PostItem 
+            key={post.id} 
+            post={post} 
+            onLike={onLike} 
+            onComment={onComment} 
+            currentUser={user} // Pass user untuk cek like
+          />
         ))
       )}
+    </div>
+
+    {/* Footer Section */}
+    <div className="mt-auto pt-12 pb-8 px-6 bg-gradient-to-b from-stone-50 to-white border-t border-stone-100">
+      <div className="max-w-xs mx-auto text-center">
+        <div className="flex justify-center items-center gap-2 mb-4 opacity-60">
+           <Code2 className="w-4 h-4 text-stone-400" />
+           <div className="h-px w-8 bg-stone-300"></div>
+        </div>
+        
+        <h3 className="text-xs font-bold text-stone-700 uppercase tracking-widest mb-1">
+          Techno Versary 2025
+        </h3>
+        
+        <p className="text-[10px] text-stone-500 font-medium leading-relaxed mb-4">
+          Himpunan Mahasiswa Teknik Informatika<br/>
+          Universitas Kuningan
+        </p>
+        
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-100">
+          <Heart className="w-3 h-3 text-orange-500 fill-orange-500 animate-pulse" />
+          <span className="text-[10px] font-semibold text-orange-700">
+            Created with love by IPTEK Division
+          </span>
+        </div>
+        
+        <p className="text-[9px] text-stone-300 mt-6">
+          v1.0.0 • Build for Community
+        </p>
+      </div>
     </div>
     
     <div className="fixed bottom-6 right-6 z-20">
@@ -367,7 +522,12 @@ const UploadView = ({ capturedImage, formData, setFormData, isSubmitting, status
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-stone-900">Nama Kamu</label>
-            <Input placeholder="Contoh: Rizky Fauzi" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} disabled={isSubmitting} />
+            <Input 
+              placeholder="Nama Lengkap" 
+              value={formData.name} 
+              onChange={(e) => setFormData({...formData, name: e.target.value})} 
+              disabled={isSubmitting} 
+            />
           </div>
 
           <div className="space-y-2">
@@ -403,43 +563,73 @@ export default function App() {
   const [posts, setPosts] = useState([]); 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
-  // Auth & Data Listener
-  useEffect(() => {
-    if (!isFirebaseInitialized) {
-      console.error("Firebase not initialized yet!");
-      return;
-    }
+  // State untuk Splash Screen
+  const [showSplash, setShowSplash] = useState(true);
 
-    const initAuth = async () => {
-       try {
-         // Priority 1: Check if environment custom token exists
-         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            try {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } catch (error) {
-              if (error.code === 'auth/custom-token-mismatch' || error.code === 'auth/invalid-custom-token') {
-                 console.warn("Auth Fallback to Anonymous");
-                 await signInAnonymously(auth);
-              } else {
-                 throw error;
-              }
-            }
-         } else {
-            await signInAnonymously(auth);
-         }
-       } catch (error) {
-         console.error("Auth Error:", error);
-         try { await signInAnonymously(auth); } catch(e) {}
-       }
-    };
-    initAuth();
-    
+  // Efek untuk Splash Screen
+  useEffect(() => {
+    // Tampilkan splash screen selama 3 detik, lalu hilangkan
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Auth Listener & Initial Logic
+  useEffect(() => {
+    if (!isFirebaseInitialized) return;
+
+    // Listen to Auth Changes
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      
+      // Auto-fill nama jika user login baru
+      if (u && u.displayName) {
+        setFormData(prev => ({...prev, name: u.displayName}));
+      }
     });
+
+    // Check for Custom Token (Preview Environment Support)
+    const handleInitialToken = async () => {
+       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          try {
+             await signInWithCustomToken(auth, __initial_auth_token);
+          } catch (e) {
+             console.warn("Custom token failed, user needs to login manually.");
+          }
+       }
+    };
+    handleInitialToken();
+
     return () => unsubscribeAuth();
   }, []);
+
+  // --- Login & Logout Handlers ---
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      // Login sukses, onAuthStateChanged akan menangani sisanya
+    } catch (error) {
+      console.error("Login Failed:", error);
+      alert(`Login Gagal: ${error.message}`);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setPosts([]); // Clear posts on logout if desired
+    } catch (error) {
+      console.error("Logout Failed:", error);
+    }
+  };
 
   // --- Realtime DB Data Fetching ---
   useEffect(() => {
@@ -550,8 +740,10 @@ export default function App() {
         name: formData.name,
         message: formData.message,
         image: cloudData.secure_url,
+        // likes di-set 0 sebagai placeholder, tapi nanti akan jadi object
         likes: 0,
         userId: user.uid,
+        userPhoto: user.photoURL || "", // Simpan foto profil Google
         timestamp: rtdbTimestamp()
       });
 
@@ -571,10 +763,28 @@ export default function App() {
 
   const handleLike = async (postId) => {
     if(!user) return;
-    const likeRef = ref(db, `moments/${postId}/likes`);
-    // Transaction atomic update untuk counter
-    runTransaction(likeRef, (currentLikes) => {
-      return (currentLikes || 0) + 1;
+    
+    // Kita akses node "likes" spesifik untuk postingan ini
+    const postLikesRef = ref(db, `moments/${postId}/likes`);
+    
+    await runTransaction(postLikesRef, (currentLikes) => {
+      // Jika data masih angka (format lama) atau null, inisialisasi object baru
+      if (currentLikes === null || typeof currentLikes === 'number') {
+        return { [user.uid]: true };
+      }
+
+      // Jika sudah object, clone dulu agar aman
+      const updates = { ...currentLikes };
+      
+      if (updates[user.uid]) {
+        // Jika sudah like -> Unlike (hapus key)
+        delete updates[user.uid];
+      } else {
+        // Jika belum like -> Like (tambah key)
+        updates[user.uid] = true;
+      }
+      
+      return updates;
     });
   };
 
@@ -584,7 +794,7 @@ export default function App() {
     const newCommentRef = push(commentsRef);
     
     await set(newCommentRef, {
-        user: "Peserta",
+        user: user.displayName || "Peserta",
         text: text,
         time: rtdbTimestamp()
     });
@@ -592,7 +802,7 @@ export default function App() {
 
   const resetForm = () => {
     setCapturedImage(null);
-    setFormData({ name: '', message: '' });
+    setFormData({ name: user?.displayName || '', message: '' }); // Reset tapi pertahankan nama
   };
 
   if (!isFirebaseInitialized) {
@@ -607,6 +817,19 @@ export default function App() {
       )
   }
 
+  // --- RENDER LOGIC ---
+  
+  // 1. Tampilkan Splash Screen dulu
+  if (showSplash) {
+    return <SplashScreen visible={showSplash} />;
+  }
+
+  // 2. Jika belum login, tampilkan Login View
+  if (!user) {
+    return <LoginView onLogin={handleGoogleLogin} isLoggingIn={isLoggingIn} />;
+  }
+
+  // 3. Jika sudah login, tampilkan Aplikasi Utama
   return (
     <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl overflow-hidden font-sans text-stone-900 relative">
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
@@ -618,6 +841,8 @@ export default function App() {
           loading={loading}
           onLike={handleLike}
           onComment={handleComment}
+          onLogout={handleLogout}
+          user={user}
         />
       )}
       {view === 'camera' && <CameraView onCapture={handleCapture} onClose={() => setView('feed')} fileInputRef={fileInputRef} />}
