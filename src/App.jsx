@@ -33,7 +33,7 @@ const CLOUDINARY_UPLOAD_PRESET = "technoversary25";
   const APP_LOGO_SPLASH = "/logo-techno.webp";
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
-const EVENT_POSTER =  "poster-seminar.webp";
+const EVENT_POSTER =  "/poster-techno.webp";
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -369,7 +369,7 @@ const PostItem = ({ post, onLike, onComment, currentUser }) => {
 
 const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }) => (
   <div className="pb-24 animate-in fade-in duration-500 bg-stone-50 min-h-screen relative flex flex-col">
-    {/* NAVBAR */}
+ {/* NAVBAR */}
     <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-lg border-b border-orange-100/50 px-6 py-3 flex justify-between items-center shadow-sm">
       <div className="flex items-center gap-2">
         {/* Navbar Logo - Small Version */}
