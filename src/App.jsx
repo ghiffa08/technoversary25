@@ -379,8 +379,8 @@ const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }
           className="h-8 w-auto object-contain"
         />
         {/* Optional: Divider */}
-        <div className="h-4 w-px bg-stone-200 mx-1 hidden sm:block"></div>
-        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest hidden sm:block pt-0.5">
+        <div className="h-4 w-px bg-stone-200 mx-1  sm:block"></div>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest  sm:block pt-0.5">
           Kick Start Your Career
         </p>
       </div>
