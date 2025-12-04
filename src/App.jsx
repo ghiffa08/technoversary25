@@ -381,7 +381,7 @@ const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }
         {/* Optional: Divider */}
         <div className="h-4 w-px bg-stone-200 mx-1  sm:block"></div>
         <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest  sm:block pt-0.5">
-          Kick Start Your Career
+         Building The Future Together
         </p>
       </div>
       <button onClick={onLogout} className="p-2 bg-stone-50 rounded-full hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors border border-stone-100" title="Keluar">
