@@ -9,6 +9,8 @@ import {
   signInWithCustomToken,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut
 } from "firebase/auth";
 import { 
@@ -26,12 +28,11 @@ const CLOUDINARY_CLOUD_NAME = "dosny0nzd";
 const CLOUDINARY_UPLOAD_PRESET = "technoversary25"; 
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
-const APP_LOGO = "/logo-techno.webp"; 
-const APP_LOGO_SPLASH = "/logo-splash.webp"; 
+const APP_LOGO = "/logo-techno.webp"
+const APP_LOGO_SPLASH = "/logo-splash.webp"
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
-// Anda bisa mengupload gambar poster ke folder public dan mengganti URL ini dengan "/poster.jpg"
-const EVENT_POSTER = "/poster-techno.webp"; 
+const EVENT_POSTER = "/poster-techno.webp"
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -144,7 +145,7 @@ const SplashScreen = ({ visible }) => {
         <div className="relative">
            <div className="absolute inset-0 bg-orange-500 blur-[60px] opacity-30 rounded-full animate-pulse"></div>
            <img 
-             src={APP_LOGO_SPLASH} 
+             src={APP_LOGO} 
              alt="Techno Versary Logo" 
              className="relative z-10 w-64 h-auto object-contain drop-shadow-2xl"
            />
@@ -183,6 +184,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      <Button 
       onClick={onLogin} 
       disabled={isLoggingIn}
+      variant="outline" // FIX: Menggunakan variant outline agar text color tidak putih
       className="w-full max-w-xs gap-3 bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-lg shadow-orange-100 h-14 text-sm font-semibold relative overflow-hidden transition-all hover:scale-[1.02]"
      >
         {isLoggingIn ? (
@@ -190,7 +192,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
         ) : (
           <>
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-            <span>Masuk dengan Google</span>
+            <span className="text-stone-700">Masuk dengan Google</span>
           </>
         )}
      </Button>
@@ -405,7 +407,8 @@ const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }
         <div className="relative z-10">
           <h2 className="text-lg font-bold mb-2">Seminar Nasional 2025</h2>
           <p className="text-orange-50 text-sm mb-4 leading-relaxed">
-            Halo, <span className="font-bold text-white underline underline-offset-2">{user?.displayName || "Peserta"}</span>! Abadikan momenmu sekarang.
+            Halo, <span className="font-bold text-white underline underline-offset-2">{user?.displayName || "Peserta"}</span>! 
+            <br/>Abadikan momenmu sekarang.
           </p>
           <Button variant="secondary" className="w-full gap-2 font-semibold text-orange-700 bg-white hover:bg-stone-50 border-none shadow-md" onClick={() => setView('camera')}>
             <Camera className="w-4 h-4" />
@@ -570,7 +573,6 @@ export default function App() {
 
   // Efek untuk Splash Screen
   useEffect(() => {
-    // Tampilkan splash screen selama 3 detik, lalu hilangkan
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
@@ -582,17 +584,27 @@ export default function App() {
   useEffect(() => {
     if (!isFirebaseInitialized) return;
 
+    // Handle Redirect Result (For Mobile)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          // User logged in via redirect
+          console.log("Redirect login success");
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect login failed:", error);
+        // alert(`Login Redirect Gagal: ${error.message}`);
+      });
+
     // Listen to Auth Changes
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      
-      // Auto-fill nama jika user login baru
       if (u && u.displayName) {
         setFormData(prev => ({...prev, name: u.displayName}));
       }
     });
 
-    // Check for Custom Token (Preview Environment Support)
     const handleInitialToken = async () => {
        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           try {
@@ -611,13 +623,21 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
     const provider = new GoogleAuthProvider();
+    
+    // Check if mobile device
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     try {
-      await signInWithPopup(auth, provider);
-      // Login sukses, onAuthStateChanged akan menangani sisanya
+      if (isMobile) {
+        // Use redirect for mobile to avoid popup blockers
+        await signInWithRedirect(auth, provider);
+      } else {
+        // Use popup for desktop
+        await signInWithPopup(auth, provider);
+      }
     } catch (error) {
       console.error("Login Failed:", error);
       alert(`Login Gagal: ${error.message}`);
-    } finally {
       setIsLoggingIn(false);
     }
   };
@@ -625,7 +645,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setPosts([]); // Clear posts on logout if desired
+      setPosts([]); 
     } catch (error) {
       console.error("Logout Failed:", error);
     }
@@ -635,7 +655,6 @@ export default function App() {
   useEffect(() => {
     if (!user || !isFirebaseInitialized) return;
     
-    // Reference ke node 'moments'
     const momentsRef = ref(db, 'moments');
     
     const unsubscribe = onValue(momentsRef, (snapshot) => {
@@ -643,10 +662,8 @@ export default function App() {
       const loadedPosts = [];
 
       if (data) {
-        // Konversi Object RTDB ke Array
         Object.keys(data).forEach((key) => {
            const item = data[key];
-           // Handle comments object -> array
            const commentsArray = item.comments 
              ? Object.values(item.comments).sort((a,b) => b.time - a.time)
              : [];
@@ -659,7 +676,6 @@ export default function App() {
         });
       }
 
-      // Sort client-side (Newest First)
       loadedPosts.sort((a, b) => {
         const tA = a.timestamp || 0;
         const tB = b.timestamp || 0;
@@ -703,7 +719,6 @@ export default function App() {
     setStatusMessage("Mengompresi Gambar...");
 
     try {
-      // 1. Upload Cloudinary (Tetap sama)
       const compressedBlob = await compressImage(capturedImage, 800, 0.7);
       
       setStatusMessage("Mengupload ke Server Gambar...");
@@ -730,20 +745,18 @@ export default function App() {
       
       const cloudData = await response.json();
       
-      // 2. Save Data to Realtime Database
       setStatusMessage("Menyimpan ke Database...");
       
       const momentsRef = ref(db, 'moments');
-      const newPostRef = push(momentsRef); // Generate unique ID
+      const newPostRef = push(momentsRef); 
       
       await set(newPostRef, {
         name: formData.name,
         message: formData.message,
         image: cloudData.secure_url,
-        // likes di-set 0 sebagai placeholder, tapi nanti akan jadi object
         likes: 0,
         userId: user.uid,
-        userPhoto: user.photoURL || "", // Simpan foto profil Google
+        userPhoto: user.photoURL || "", 
         timestamp: rtdbTimestamp()
       });
 
@@ -764,23 +777,18 @@ export default function App() {
   const handleLike = async (postId) => {
     if(!user) return;
     
-    // Kita akses node "likes" spesifik untuk postingan ini
     const postLikesRef = ref(db, `moments/${postId}/likes`);
     
     await runTransaction(postLikesRef, (currentLikes) => {
-      // Jika data masih angka (format lama) atau null, inisialisasi object baru
       if (currentLikes === null || typeof currentLikes === 'number') {
         return { [user.uid]: true };
       }
 
-      // Jika sudah object, clone dulu agar aman
       const updates = { ...currentLikes };
       
       if (updates[user.uid]) {
-        // Jika sudah like -> Unlike (hapus key)
         delete updates[user.uid];
       } else {
-        // Jika belum like -> Like (tambah key)
         updates[user.uid] = true;
       }
       
@@ -802,7 +810,7 @@ export default function App() {
 
   const resetForm = () => {
     setCapturedImage(null);
-    setFormData({ name: user?.displayName || '', message: '' }); // Reset tapi pertahankan nama
+    setFormData({ name: user?.displayName || '', message: '' }); 
   };
 
   if (!isFirebaseInitialized) {
@@ -819,17 +827,14 @@ export default function App() {
 
   // --- RENDER LOGIC ---
   
-  // 1. Tampilkan Splash Screen dulu
   if (showSplash) {
     return <SplashScreen visible={showSplash} />;
   }
 
-  // 2. Jika belum login, tampilkan Login View
   if (!user) {
     return <LoginView onLogin={handleGoogleLogin} isLoggingIn={isLoggingIn} />;
   }
 
-  // 3. Jika sudah login, tampilkan Aplikasi Utama
   return (
     <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl overflow-hidden font-sans text-stone-900 relative">
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
