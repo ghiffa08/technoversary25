@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Upload, Send, X, Heart, MessageSquare, Plus, User, Image as ImageIcon, Sparkles, RefreshCw, Circle, Loader2, AlertTriangle, Settings, ChevronRight, LogOut, Code2 } from 'lucide-react';
+import { Camera, Upload, Send, X, Heart, MessageSquare, Plus, User, Image as ImageIcon, Sparkles, RefreshCw, Circle, Loader2, AlertTriangle, Settings, ChevronRight, LogOut, Code2, Share2, Download } from 'lucide-react';
 
 // --- FIREBASE IMPORTS (REALTIME DATABASE & AUTH) ---
 import { initializeApp, getApps, getApp } from "firebase/app";
@@ -9,8 +9,6 @@ import {
   signInWithCustomToken,
   GoogleAuthProvider,
   signInWithPopup,
-  // signInWithRedirect, // Kita hapus ini agar lebih stabil
-  // getRedirectResult,  // Kita hapus ini
   signOut
 } from "firebase/auth";
 import { 
@@ -28,12 +26,11 @@ const CLOUDINARY_CLOUD_NAME = "dosny0nzd";
 const CLOUDINARY_UPLOAD_PRESET = "technoversary25"; 
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
-  const APP_LOGO = "/logo-techno.webp";
-
-  const APP_LOGO_SPLASH = "/logo-techno.webp";
+const APP_LOGO = "/logo-techno.webp";
+const APP_LOGO_SPLASH = "/logo-techno.webp";
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
-const EVENT_POSTER =  "/poster-techno.webp";
+const EVENT_POSTER = "/poster-techno.webp";
 
 // --- FIREBASE INITIALIZATION ---
 let auth;
@@ -94,6 +91,134 @@ const compressImage = (dataUrl, maxWidth = 800, quality = 0.7) => {
         resolve(blob);
       }, 'image/jpeg', quality);
     };
+  });
+};
+
+// --- UTILS: Story Generator (Canvas) ---
+const generateStoryImage = async (post) => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set ukuran story (1080x1920)
+    const width = 1080;
+    const height = 1920; 
+    canvas.width = width;
+    canvas.height = height;
+
+    // 1. Background Gradient (Orange Theme)
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#f97316'); // Orange-500
+    gradient.addColorStop(1, '#dc2626'); // Red-600
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Dekorasi Background (Circles)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.beginPath();
+    ctx.arc(width, 0, 400, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, height, 300, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // 3. Load Main Image
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // Penting untuk Cloudinary/External URL
+    img.src = post.image; 
+
+    img.onload = () => {
+       try {
+         // --- Draw Card Container ---
+         const cardMargin = 100;
+         const cardY = 350;
+         const cardWidth = width - (cardMargin * 2);
+         const cardHeight = 1100; // Tinggi area putih
+         
+         // Shadow untuk card
+         ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+         ctx.shadowBlur = 50;
+         ctx.shadowOffsetY = 30;
+         
+         // Card Putih
+         ctx.fillStyle = '#ffffff';
+         // Fallback roundRect untuk browser lama
+         if (ctx.roundRect) {
+             ctx.beginPath();
+             ctx.roundRect(cardMargin, cardY, cardWidth, cardHeight, 40);
+             ctx.fill();
+         } else {
+             ctx.fillRect(cardMargin, cardY, cardWidth, cardHeight);
+         }
+         ctx.shadowColor = "transparent"; // Reset shadow
+
+         // --- Draw User Photo ---
+         const imgMargin = 50;
+         const imgDrawWidth = cardWidth - (imgMargin * 2);
+         const imgDrawHeight = imgDrawWidth * 0.75; // 4:3 Aspect Ratio
+         const imgX = cardMargin + imgMargin;
+         const imgY = cardY + imgMargin;
+
+         // Crop/Fit Image logic (Simple draw for now)
+         ctx.drawImage(img, imgX, imgY, imgDrawWidth, imgDrawHeight);
+
+         // --- Draw Text ---
+         ctx.textAlign = 'center';
+         
+         // Nama User
+         ctx.fillStyle = '#1c1917'; // Stone-900
+         ctx.font = 'bold 50px sans-serif';
+         ctx.fillText(post.name, width / 2, imgY + imgDrawHeight + 100);
+
+         // Kesan Pesan (Word Wrap)
+         ctx.fillStyle = '#57534e'; // Stone-600
+         ctx.font = 'italic 38px sans-serif';
+         
+         const text = `"${post.message}"`;
+         const maxWidth = imgDrawWidth;
+         const lineHeight = 55;
+         const x = width / 2;
+         let y = imgY + imgDrawHeight + 180;
+         
+         const words = text.split(' ');
+         let line = '';
+         for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+              ctx.fillText(line, x, y);
+              line = words[n] + ' ';
+              y += lineHeight;
+            } else {
+              line = testLine;
+            }
+         }
+         ctx.fillText(line, x, y);
+
+         // --- Footer Text ---
+         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+         ctx.font = 'bold 42px sans-serif';
+         ctx.fillText('TECHNO VERSARY 2025', width / 2, height - 150);
+         
+         ctx.font = '30px sans-serif';
+         ctx.fillText('#BuildingTheFutureTogether', width / 2, height - 100);
+
+         // --- Export Blob ---
+         canvas.toBlob((blob) => {
+           if (blob) {
+             resolve(new File([blob], "story-moment.png", { type: "image/png" }));
+           } else {
+             reject(new Error("Canvas blob failed"));
+           }
+         }, 'image/png');
+
+       } catch (e) {
+         reject(e);
+       }
+    };
+
+    img.onerror = (err) => reject(new Error("Gagal memuat gambar untuk story"));
   });
 };
 
@@ -164,6 +289,37 @@ const SplashScreen = ({ visible }) => {
   );
 };
 
+// --- SHARE MODAL COMPONENT ---
+const ShareModal = ({ image, onClose }) => {
+  if (!image) return null;
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="relative w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="font-bold text-stone-900">Siap Dibagikan!</h3>
+          <button onClick={onClose}><X className="w-6 h-6 text-stone-500" /></button>
+        </div>
+        <div className="p-4 bg-stone-100 flex justify-center">
+          <img src={image} alt="Story to share" className="w-full h-auto rounded-lg shadow-md max-h-[60vh] object-contain" />
+        </div>
+        <div className="p-4 text-center space-y-3">
+          <p className="text-sm text-stone-600">
+            Unduh gambar ini untuk dibagikan! <br/>
+            <span className="font-bold text-orange-600">Tekan lama gambar</span> atau gunakan tombol di bawah untuk menyimpan, lalu upload ke Story Anda.
+          </p>
+          <a 
+            href={image} 
+            download="technoversary-moment.png"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-orange-600 text-white rounded-xl font-bold text-sm hover:bg-orange-700 transition-colors"
+          >
+            <Download className="w-4 h-4" /> Simpan Gambar
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- LOGIN VIEW ---
 const LoginView = ({ onLogin, isLoggingIn }) => (
   <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
@@ -199,7 +355,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      </Button>
      
      <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
-       Himpunan Mahasiswa Teknik Informatika<br/>Universitas Kuningan
+       Himpunan Mahasiswa Teknik Informatika
      </p>
   </div>
 );
@@ -271,10 +427,11 @@ const CameraView = ({ onCapture, onClose, fileInputRef }) => {
 };
 
 // --- Post Item Component with Comments ---
-const PostItem = ({ post, onLike, onComment, currentUser }) => {
+const PostItem = ({ post, onLike, onComment, onShare, currentUser }) => {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [isSendingComment, setIsSendingComment] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   const handleSendComment = async () => {
     if(!commentText.trim()) return;
@@ -282,6 +439,12 @@ const PostItem = ({ post, onLike, onComment, currentUser }) => {
     await onComment(post.id, commentText);
     setCommentText("");
     setIsSendingComment(false);
+  };
+
+  const handleShareClick = async () => {
+    setIsSharing(true);
+    await onShare(post);
+    setIsSharing(false);
   };
 
   // --- LOGIKA LIKE BARU ---
@@ -311,20 +474,32 @@ const PostItem = ({ post, onLike, onComment, currentUser }) => {
         
         {/* Actions */}
         <div className="mt-4 flex items-center justify-between border-t border-stone-50 pt-3">
+          <div className="flex gap-4">
+            <button 
+              onClick={() => onLike(post.id)}
+              className={`flex items-center gap-1.5 text-xs font-medium transition-colors group/like ${isLiked ? 'text-red-500' : 'text-stone-500 hover:text-red-500'}`}
+            >
+              <Heart className={`w-4 h-4 group-active/like:scale-125 transition-transform ${isLiked ? 'fill-red-500 text-red-500' : ''}`} /> 
+              {likeCount}
+            </button>
+            
+            <button 
+              onClick={() => setShowComments(!showComments)}
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-orange-500 transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" /> 
+              {post.comments ? post.comments.length : 0}
+            </button>
+          </div>
+
+          {/* Tombol Share Baru */}
           <button 
-            onClick={() => onLike(post.id)}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors group/like ${isLiked ? 'text-red-500' : 'text-stone-500 hover:text-red-500'}`}
+            onClick={handleShareClick}
+            disabled={isSharing}
+            className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-blue-500 transition-colors"
           >
-            <Heart className={`w-4 h-4 group-active/like:scale-125 transition-transform ${isLiked ? 'fill-red-500 text-red-500' : ''}`} /> 
-            {likeCount} Suka
-          </button>
-          
-          <button 
-            onClick={() => setShowComments(!showComments)}
-            className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-orange-500 transition-colors"
-          >
-            <MessageSquare className="w-4 h-4" /> 
-            {post.comments ? post.comments.length : 0} Komentar
+            {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+            Share
           </button>
         </div>
 
@@ -367,9 +542,9 @@ const PostItem = ({ post, onLike, onComment, currentUser }) => {
   );
 }
 
-const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }) => (
+const FeedView = ({ posts, setView, onLike, onComment, onShare, loading, onLogout, user }) => (
   <div className="pb-24 animate-in fade-in duration-500 bg-stone-50 min-h-screen relative flex flex-col">
- {/* NAVBAR */}
+    {/* NAVBAR */}
     <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-lg border-b border-orange-100/50 px-6 py-3 flex justify-between items-center shadow-sm">
       <div className="flex items-center gap-2">
         {/* Navbar Logo - Small Version */}
@@ -379,9 +554,9 @@ const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }
           className="h-8 w-auto object-contain"
         />
         {/* Optional: Divider */}
-        <div className="h-4 w-px bg-stone-200 mx-1  sm:block"></div>
-        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest  sm:block pt-0.5">
-         Building The Future Together
+        <div className="h-4 w-px bg-stone-200 mx-1 hidden sm:block"></div>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest hidden sm:block pt-0.5">
+          Kick Start Your Career
         </p>
       </div>
       <button onClick={onLogout} className="p-2 bg-stone-50 rounded-full hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors border border-stone-100" title="Keluar">
@@ -441,6 +616,7 @@ const FeedView = ({ posts, setView, onLike, onComment, loading, onLogout, user }
             post={post} 
             onLike={onLike} 
             onComment={onComment} 
+            onShare={onShare} // Pass handler
             currentUser={user} // Pass user untuk cek like
           />
         ))
@@ -567,6 +743,7 @@ export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [shareModalImage, setShareModalImage] = useState(null);
   
   // State untuk Splash Screen
   const [showSplash, setShowSplash] = useState(true);
@@ -643,6 +820,35 @@ export default function App() {
       setPosts([]); 
     } catch (error) {
       console.error("Logout Failed:", error);
+    }
+  };
+
+  // --- Handle Share ---
+  const handleShare = async (post) => {
+    try {
+      // 1. Generate Story Image (Canvas)
+      const file = await generateStoryImage(post);
+
+      // 2. Share via Web Share API
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Techno Versary 2025',
+          text: `Cek momen seru ini dari ${post.name}! #TechnoVersary2025`,
+        });
+      } else {
+        throw new Error("Sharing file tidak didukung");
+      }
+    } catch (error) {
+      console.warn("Share failed, opening modal:", error);
+      // Fallback: Generate URL object for the modal
+      try {
+         const file = await generateStoryImage(post);
+         const imageUrl = URL.createObjectURL(file);
+         setShareModalImage(imageUrl);
+      } catch (e) {
+         alert("Gagal membuat gambar untuk dibagikan.");
+      }
     }
   };
 
@@ -835,6 +1041,14 @@ export default function App() {
     <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl overflow-hidden font-sans text-stone-900 relative">
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
       
+      {/* Share Modal */}
+      {shareModalImage && (
+        <ShareModal 
+          image={shareModalImage} 
+          onClose={() => setShareModalImage(null)} 
+        />
+      )}
+
       {view === 'feed' && (
         <FeedView 
           posts={posts} 
@@ -842,6 +1056,7 @@ export default function App() {
           loading={loading}
           onLike={handleLike}
           onComment={handleComment}
+          onShare={handleShare} // Pass share handler
           onLogout={handleLogout}
           user={user}
         />
