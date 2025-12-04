@@ -29,6 +29,7 @@ const CLOUDINARY_UPLOAD_PRESET = "technoversary25";
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
 const APP_LOGO = "/logo-techno.webp"
+
 const APP_LOGO_SPLASH = "/logo-splash.webp"
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
@@ -184,7 +185,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      <Button 
       onClick={onLogin} 
       disabled={isLoggingIn}
-      variant="outline" // FIX: Menggunakan variant outline agar text color tidak putih
+      variant="outline" 
       className="w-full max-w-xs gap-3 bg-white text-stone-700 hover:bg-stone-50 border border-stone-200 shadow-lg shadow-orange-100 h-14 text-sm font-semibold relative overflow-hidden transition-all hover:scale-[1.02]"
      >
         {isLoggingIn ? (
@@ -198,7 +199,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      </Button>
      
      <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
-       Himpunan Mahasiswa Teknik Informatika
+       Himpunan Mahasiswa Teknik Informatika<br/>Universitas Kuningan
      </p>
   </div>
 );
@@ -284,15 +285,12 @@ const PostItem = ({ post, onLike, onComment, currentUser }) => {
   };
 
   // --- LOGIKA LIKE BARU ---
-  // Cek apakah data likes berbentuk object (versi baru) atau angka (versi lama)
   const likesData = post.likes || {};
   
-  // Hitung jumlah like
   const likeCount = typeof likesData === 'number' 
     ? likesData 
     : Object.keys(likesData).length;
 
-  // Cek apakah user sudah like
   const isLiked = typeof likesData === 'object' && currentUser 
     ? !!likesData[currentUser.uid] 
     : false;
@@ -565,6 +563,8 @@ export default function App() {
   const [view, setView] = useState('feed'); 
   const [posts, setPosts] = useState([]); 
   const [user, setUser] = useState(null);
+  // FIX: Tambahkan isAuthChecking agar tidak render LoginView saat redirect belum selesai
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [loading, setLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -588,13 +588,11 @@ export default function App() {
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          // User logged in via redirect
-          console.log("Redirect login success");
+          console.log("Redirect login success", result);
         }
       })
       .catch((error) => {
         console.error("Redirect login failed:", error);
-        // alert(`Login Redirect Gagal: ${error.message}`);
       });
 
     // Listen to Auth Changes
@@ -603,6 +601,8 @@ export default function App() {
       if (u && u.displayName) {
         setFormData(prev => ({...prev, name: u.displayName}));
       }
+      // PENTING: Set isAuthChecking false setelah firebase selesai inisialisasi state
+      setIsAuthChecking(false);
     });
 
     const handleInitialToken = async () => {
@@ -637,7 +637,14 @@ export default function App() {
       }
     } catch (error) {
       console.error("Login Failed:", error);
-      alert(`Login Gagal: ${error.message}`);
+      
+      // Handle specific error for unauthorized domain
+      if (error.code === 'auth/unauthorized-domain') {
+        alert("Konfigurasi Firebase Belum Lengkap:\nDomain aplikasi ini belum didaftarkan di Firebase Console.\n\nSolusi: Buka Firebase Console > Authentication > Settings > Authorized Domains, lalu tambahkan domain Vercel Anda.");
+      } else {
+        alert(`Login Gagal: ${error.message}`);
+      }
+      
       setIsLoggingIn(false);
     }
   };
@@ -827,8 +834,9 @@ export default function App() {
 
   // --- RENDER LOGIC ---
   
-  if (showSplash) {
-    return <SplashScreen visible={showSplash} />;
+  // FIX: Tampilkan Splash Screen SELAMA Auth Checking ATAU showSplash masih true
+  if (showSplash || isAuthChecking) {
+    return <SplashScreen visible={true} />;
   }
 
   if (!user) {
