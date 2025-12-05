@@ -472,10 +472,10 @@ ctx.fillText(line, x, y);
 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
          
          ctx.font = 'bold 45px sans-serif';
-         ctx.fillText('Seminar Nasional Techno Versary 2025', width / 2, height - 160);
+         ctx.fillText('SEMINAR NASIONAL TECHNO VERSARY 2025', width / 2, height - 160);
 
          ctx.font = '30px sans-serif';
-         ctx.fillText('Kick Start Your Career as a Software Engineer', width / 2, height - 100);
+         ctx.fillText('Kick Start Your Career as A Software Engineer', width / 2, height - 100);
 
          // --- Export Blob ---
          canvas.toBlob((blob) => {
