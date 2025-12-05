@@ -27,7 +27,7 @@ const CLOUDINARY_UPLOAD_PRESET = "technoversary25";
 
 // [PENTING] Ganti URL ini dengan path gambar logo Anda!
 const APP_LOGO = "/logo-techno.webp";
-const APP_LOGO_SPLASH = "/logo-techno.webp";
+const APP_LOGO_SPLASH = "/logo-splash.webp";
 
 // [PENTING] Ganti URL ini dengan path gambar Poster Seminar Anda!
 const EVENT_POSTER = "/poster-techno.webp";
@@ -67,8 +67,8 @@ try {
   console.error("Firebase Init Error:", error);
 }
 
-// --- UTILS: Image Optimization ---
-const compressImage = (dataUrl, maxWidth = 800, quality = 0.7) => {
+// --- UTILS: Image Optimization (UPDATED: Less Compression) ---
+const compressImage = (dataUrl, maxWidth = 1080, quality = 0.85) => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = dataUrl;
@@ -94,7 +94,7 @@ const compressImage = (dataUrl, maxWidth = 800, quality = 0.7) => {
   });
 };
 
-// --- UTILS: Story Generator (Canvas) ---
+// --- UTILS: Story Generator (Canvas) (UPDATED: Fix Aspect Ratio & Add Logo) ---
 const generateStoryImage = async (post) => {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
@@ -105,6 +105,15 @@ const generateStoryImage = async (post) => {
     const height = 1920; 
     canvas.width = width;
     canvas.height = height;
+
+    // Helper untuk load image
+    const loadImage = (src) => new Promise((r, rej) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = src;
+        img.onload = () => r(img);
+        img.onerror = rej;
+    });
 
     // 1. Background Gradient (Orange Theme)
     const gradient = ctx.createLinearGradient(0, 0, width, height);
@@ -122,18 +131,29 @@ const generateStoryImage = async (post) => {
     ctx.arc(0, height, 300, 0, 2 * Math.PI);
     ctx.fill();
 
-    // 3. Load Main Image
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // Penting untuk Cloudinary/External URL
-    img.src = post.image; 
+    // Load Gambar & Logo secara bersamaan
+    Promise.all([
+        loadImage(post.image),
+        loadImage(APP_LOGO)
+    ]).then(([img, logoImg]) => {
+         // --- Draw Logo (Top) ---
+         const logoTargetWidth = 400; 
+         const logoAspectRatio = logoImg.height / logoImg.width;
+         const logoTargetHeight = logoTargetWidth * logoAspectRatio;
+         const logoX = (width - logoTargetWidth) / 2;
+         const logoY = 150; // Jarak dari atas
+         
+         // Glow effect untuk logo
+         ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
+         ctx.shadowBlur = 20;
+         ctx.drawImage(logoImg, logoX, logoY, logoTargetWidth, logoTargetHeight);
+         ctx.shadowColor = "transparent"; // Reset shadow
 
-    img.onload = () => {
-       try {
          // --- Draw Card Container ---
          const cardMargin = 100;
-         const cardY = 350;
+         const cardY = logoY + logoTargetHeight + 100; // Posisi card di bawah logo
          const cardWidth = width - (cardMargin * 2);
-         const cardHeight = 1100; // Tinggi area putih
+         const cardHeight = 1000; // Tinggi area putih
          
          // Shadow untuk card
          ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
@@ -142,7 +162,6 @@ const generateStoryImage = async (post) => {
          
          // Card Putih
          ctx.fillStyle = '#ffffff';
-         // Fallback roundRect untuk browser lama
          if (ctx.roundRect) {
              ctx.beginPath();
              ctx.roundRect(cardMargin, cardY, cardWidth, cardHeight, 40);
@@ -150,17 +169,40 @@ const generateStoryImage = async (post) => {
          } else {
              ctx.fillRect(cardMargin, cardY, cardWidth, cardHeight);
          }
-         ctx.shadowColor = "transparent"; // Reset shadow
+         ctx.shadowColor = "transparent";
 
-         // --- Draw User Photo ---
+         // --- Draw User Photo (Crop Center / Object Cover) ---
          const imgMargin = 50;
-         const imgDrawWidth = cardWidth - (imgMargin * 2);
-         const imgDrawHeight = imgDrawWidth * 0.75; // 4:3 Aspect Ratio
-         const imgX = cardMargin + imgMargin;
-         const imgY = cardY + imgMargin;
+         const destW = cardWidth - (imgMargin * 2);
+         const destH = destW * 0.75; // 4:3 Aspect Ratio target area
+         const destX = cardMargin + imgMargin;
+         const destY = cardY + imgMargin;
 
-         // Crop/Fit Image logic (Simple draw for now)
-         ctx.drawImage(img, imgX, imgY, imgDrawWidth, imgDrawHeight);
+         // Hitung rasio untuk crop "cover"
+         const sourceRatio = img.width / img.height;
+         const targetRatio = destW / destH;
+         let sx, sy, sWidth, sHeight;
+
+         if (sourceRatio > targetRatio) {
+             sHeight = img.height;
+             sWidth = sHeight * targetRatio;
+             sx = (img.width - sWidth) / 2;
+             sy = 0;
+         } else {
+             sWidth = img.width;
+             sHeight = sWidth / targetRatio;
+             sx = 0;
+             sy = (img.height - sHeight) / 2;
+         }
+
+         // Draw cropped image
+         ctx.save();
+         // Clip area agar rounded (opsional, rectangle biasa ok karena ada margin)
+         ctx.beginPath();
+         ctx.rect(destX, destY, destW, destH);
+         ctx.clip();
+         ctx.drawImage(img, sx, sy, sWidth, sHeight, destX, destY, destW, destH);
+         ctx.restore();
 
          // --- Draw Text ---
          ctx.textAlign = 'center';
@@ -168,17 +210,17 @@ const generateStoryImage = async (post) => {
          // Nama User
          ctx.fillStyle = '#1c1917'; // Stone-900
          ctx.font = 'bold 50px sans-serif';
-         ctx.fillText(post.name, width / 2, imgY + imgDrawHeight + 100);
+         ctx.fillText(post.name, width / 2, destY + destH + 100);
 
          // Kesan Pesan (Word Wrap)
          ctx.fillStyle = '#57534e'; // Stone-600
          ctx.font = 'italic 38px sans-serif';
          
          const text = `"${post.message}"`;
-         const maxWidth = imgDrawWidth;
+         const maxWidth = destW;
          const lineHeight = 55;
          const x = width / 2;
-         let y = imgY + imgDrawHeight + 180;
+         let y = destY + destH + 180;
          
          const words = text.split(' ');
          let line = '';
@@ -198,8 +240,6 @@ const generateStoryImage = async (post) => {
 
          // --- Footer Text ---
          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-         ctx.font = 'bold 42px sans-serif';
-         ctx.fillText('TECHNO VERSARY 2025', width / 2, height - 150);
          
          ctx.font = '30px sans-serif';
          ctx.fillText('#BuildingTheFutureTogether', width / 2, height - 100);
@@ -213,12 +253,9 @@ const generateStoryImage = async (post) => {
            }
          }, 'image/png');
 
-       } catch (e) {
-         reject(e);
-       }
-    };
-
-    img.onerror = (err) => reject(new Error("Gagal memuat gambar untuk story"));
+    }).catch(err => {
+        reject(new Error("Gagal memuat gambar atau logo"));
+    });
   });
 };
 
@@ -355,7 +392,7 @@ const LoginView = ({ onLogin, isLoggingIn }) => (
      </Button>
      
      <p className="mt-8 text-[10px] text-stone-400 uppercase tracking-wide">
-       Himpunan Mahasiswa Teknik Informatika
+       Himpunan Mahasiswa Teknik Informatika<br/>Universitas Kuningan
      </p>
   </div>
 );
@@ -554,9 +591,9 @@ const FeedView = ({ posts, setView, onLike, onComment, onShare, loading, onLogou
           className="h-8 w-auto object-contain"
         />
         {/* Optional: Divider */}
-        <div className="h-4 w-px bg-stone-200 mx-1 hidden sm:block"></div>
-        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest hidden sm:block pt-0.5">
-          Kick Start Your Career
+        <div className="h-4 w-px bg-stone-200 mx-1  sm:block"></div>
+        <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest  sm:block pt-0.5">
+         Building The Future together
         </p>
       </div>
       <button onClick={onLogout} className="p-2 bg-stone-50 rounded-full hover:bg-stone-100 text-stone-400 hover:text-red-500 transition-colors border border-stone-100" title="Keluar">
